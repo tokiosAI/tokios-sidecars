@@ -33,6 +33,12 @@ public sealed class SidecarOptions
     /// and any other id is a 400 (fail closed, like the connector's AllowedHosts).</summary>
     public string[] Models { get; set; } = Array.Empty<string>();
 
+    /// <summary>When true, client tool definitions (<c>tools</c>/<c>tool_choice</c>/<c>functions</c>)
+    /// are stripped instead of rejected, and tool-result messages are flattened into the transcript as
+    /// text — lets chat clients that always attach tools (opencode &amp;c.) connect. The model cannot
+    /// call those tools back, so agentic client flows degrade to plain chat. Default false (strict).</summary>
+    public bool AllowClientTools { get; set; }
+
     /// <summary>Max concurrent requests in flight against the shared codex app-server process.
     /// Subscription rate limits make high values pointless; 1–2 is realistic.</summary>
     public int MaxConcurrency { get; set; } = 2;

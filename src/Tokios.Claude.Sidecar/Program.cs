@@ -52,7 +52,7 @@ app.MapPost("/v1/chat/completions", async (HttpContext ctx) =>
     try
     {
         using var doc = await JsonDocument.ParseAsync(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
-        req = ChatRequestFlattener.Flatten(doc.RootElement);
+        req = ChatRequestFlattener.Flatten(doc.RootElement, options.AllowClientTools);
     }
     catch (ChatRequestException ex)
     {

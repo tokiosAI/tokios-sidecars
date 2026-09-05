@@ -14,15 +14,17 @@ public sealed class ChatRequestException(string message) : Exception(message);
 /// </summary>
 public static class ChatRequestFlattener
 {
-    public static FlattenedRequest Flatten(JsonElement root)
+    public static FlattenedRequest Flatten(JsonElement root, bool allowClientTools = false)
     {
         if (root.ValueKind != JsonValueKind.Object)
             throw new ChatRequestException("Request body must be a JSON object.");
 
-        // No client tool-calling: the CLI runs its own (restricted) tools; emulating client tools on top
-        // is out of scope for v1.
+        // Client tool-calling does not map: the CLI is an agent harness with its own (restricted) tools.
+        // Strict by default; with allowClientTools the definitions are stripped and tool results are
+        // flattened into the transcript as text, so chat clients that always attach tools (opencode &c.)
+        // can still talk to the model — degraded to plain chat, the model cannot call those tools back.
         foreach (var name in new[] { "tools", "tool_choice", "functions", "function_call" })
-            if (root.TryGetProperty(name, out _))
+            if (!allowClientTools && root.TryGetProperty(name, out _))
                 throw new ChatRequestException(
                     $"'{name}' is not supported: the Claude CLI runs its own tools. Send plain chat messages.");
 
@@ -88,11 +90,27 @@ public static class ChatRequestFlattener
                     if (text.Length > 0) systemParts.Add(text);
                     break;
                 case "user":
+                    turns.Add((role, text));
+                    break;
                 case "assistant":
+                    // In lenient mode an assistant turn may carry only tool_calls; keep the thread
+                    // readable by noting the call(s) in the transcript.
+                    if (allowClientTools && text.Length == 0
+                        && msg.TryGetProperty("tool_calls", out var tcs) && tcs.ValueKind == JsonValueKind.Array)
+                    {
+                        var names = tcs.EnumerateArray()
+                            .Select(tc => tc.TryGetProperty("function", out var f)
+                                && f.TryGetProperty("name", out var fn) ? fn.GetString() : null)
+                            .Where(n => !string.IsNullOrEmpty(n));
+                        text = "[called tools: " + string.Join(", ", names) + "]";
+                    }
                     turns.Add((role, text));
                     break;
                 case "tool":
-                    throw new ChatRequestException("tool messages are not supported (no client tool-calling).");
+                    if (!allowClientTools)
+                        throw new ChatRequestException("tool messages are not supported (no client tool-calling).");
+                    turns.Add((role, text));
+                    break;
                 default:
                     throw new ChatRequestException($"Unsupported message role '{role}'.");
             }
@@ -105,7 +123,8 @@ public static class ChatRequestFlattener
         // sees the conversation as text, since the CLI has no structured message input in print mode.
         var prompt = turns.Count == 1 && turns[0].Role == "user"
             ? turns[0].Text
-            : string.Join("\n\n", turns.Select(t => $"{(t.Role == "user" ? "User" : "Assistant")}:\n{t.Text}"));
+            : string.Join("\n\n", turns.Select(t =>
+                $"{(t.Role == "user" ? "User" : t.Role == "assistant" ? "Assistant" : "Tool")}:\n{t.Text}"));
 
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ChatRequestException("The flattened prompt is empty.");

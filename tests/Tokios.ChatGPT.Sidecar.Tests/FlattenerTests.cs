@@ -11,6 +11,12 @@ public sealed class FlattenerTests
         return ChatRequestFlattener.Flatten(doc.RootElement);
     }
 
+    private static FlattenedRequest FlattenAllowingTools(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return ChatRequestFlattener.Flatten(doc.RootElement, allowClientTools: true);
+    }
+
     private static ChatRequestException Reject(string json) =>
         Assert.Throws<ChatRequestException>(() => Flatten(json));
 
@@ -120,6 +126,30 @@ public sealed class FlattenerTests
     public void Rejects_NonStringModel() =>
         Assert.Contains("'model' must be a string", Reject(
             """{"model":5,"messages":[{"role":"user","content":"hi"}]}""").Message);
+
+    [Fact]
+    public void AllowClientTools_StripsToolDefinitions()
+    {
+        var req = FlattenAllowingTools(
+            """{"messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"bash"}}],"tool_choice":"auto"}""");
+        Assert.Equal("hi", req.Prompt);
+    }
+
+    [Fact]
+    public void AllowClientTools_FlattensToolMessagesIntoTranscript()
+    {
+        var req = FlattenAllowingTools("""
+            {"messages":[
+                {"role":"user","content":"list files"},
+                {"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"bash","arguments":"{}"}}]},
+                {"role":"tool","tool_call_id":"c1","content":"a.txt b.txt"},
+                {"role":"user","content":"thanks"}
+            ]}
+            """);
+        Assert.Equal(
+            "User:\nlist files\n\nAssistant:\n[called tools: bash]\n\nTool:\na.txt b.txt\n\nUser:\nthanks",
+            req.Prompt);
+    }
 
     [Fact]
     public void ContentPartArrays_ConcatenateTextParts()
