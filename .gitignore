@@ -1,0 +1,12 @@
+bin/
+obj/
+artifacts/
+dist/
+publish/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+# Local sidecar config (listen URL, model, effort) — machine-specific, not source.
+sidecar.json

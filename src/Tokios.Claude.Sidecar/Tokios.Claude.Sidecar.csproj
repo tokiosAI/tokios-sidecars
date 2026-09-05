@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Output binary name: lowercase, hyphen-separated (no '.') — same convention as tokios-connector. -->
+    <AssemblyName>tokios-claude-sidecar</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Build version stamped from a UTC timestamp (yyyy.MMdd.HHmm — parses as System.Version and orders
+       chronologically), the same scheme as tokios-connector. Release builds pin it to the release tag
+       (-p:SidecarBuildStamp=<tag>) so a binary's file version equals the tag it was built from; local builds
+       stamp from the clock. AssemblyVersion stays fixed so the assembly identity doesn't churn. -->
+  <PropertyGroup>
+    <SidecarBuildStamp Condition="'$(SidecarBuildStamp)' == ''">$([System.DateTime]::UtcNow.ToString("yyyy.MMdd.HHmm"))</SidecarBuildStamp>
+    <Version>$(SidecarBuildStamp)</Version>
+    <FileVersion>$(SidecarBuildStamp)</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- The ASP.NET Core runtime pack carries a native library on Windows (the IIS in-process module) that a
+         single-file publish would otherwise leave beside the exe. Set here, not per publish command, so every
+         publish — the release workflow or a local one — yields exactly one file. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+</Project>

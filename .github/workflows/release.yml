@@ -1,0 +1,98 @@
+# Builds the official release binaries FROM THIS PUBLIC REPO so anyone can verify that what we
+# distribute is what this source produces:
+#   - the version stamp is pinned to the tag (-p:SidecarBuildStamp), not the build clock;
+#   - SHA256SUMS ships with the release;
+#   - GitHub build-provenance attestations are published for every binary
+#     (verify: `gh attestation verify <file> --repo tokiosAI/tokios-sidecars`).
+#
+# Tags must be `v` + a dotted-numeric version, e.g. v2026.0905.1200 (yyyy.MMdd.HHmm — parses as
+# System.Version and orders chronologically). One tag releases BOTH sidecars.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Derive and validate version stamp from tag
+        id: stamp
+        run: |
+          STAMP="${GITHUB_REF_NAME#v}"
+          echo "$STAMP" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$' || {
+            echo "Tag '$GITHUB_REF_NAME' is not v<dotted-numeric-version> (e.g. v2026.0905.1200)"; exit 1; }
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: dotnet test TokiosSidecars.sln -c Release
+
+      - name: Publish binaries and archives
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # binary-name=project-directory pairs; the binary name is each project's AssemblyName.
+          for pair in tokios-claude-sidecar=src/Tokios.Claude.Sidecar tokios-chatgpt-sidecar=src/Tokios.ChatGPT.Sidecar; do
+            name="${pair%%=*}"; proj="${pair#*=}"
+            for rid in linux-x64 linux-arm64 win-x64 win-arm64 osx-arm64; do
+              dotnet publish "$proj" -c Release -r "$rid" --self-contained \
+                -p:PublishSingleFile=true -p:SidecarBuildStamp=${{ steps.stamp.outputs.stamp }} \
+                -o "publish/$name/$rid"
+              # Ship BOTH the raw single-file binary (download-and-run) and a compressed archive: ~half the
+              # size, bundles the license files, and on POSIX preserves the executable bit so no chmod is
+              # needed. Windows -> .zip, else .tar.gz.
+              stage="stage/$name/$rid"
+              mkdir -p "$stage"
+              cp LICENSE NOTICE THIRD-PARTY-NOTICES.txt "$stage/"
+              case "$rid" in
+                win-*)
+                  cp "publish/$name/$rid/$name.exe" "dist/$name-$rid.exe"
+                  cp "publish/$name/$rid/$name.exe" "$stage/"
+                  (cd "$stage" && zip -q "$GITHUB_WORKSPACE/dist/$name-$rid.zip" \
+                    "$name.exe" LICENSE NOTICE THIRD-PARTY-NOTICES.txt)
+                  ;;
+                *)
+                  cp "publish/$name/$rid/$name" "dist/$name-$rid"
+                  cp "publish/$name/$rid/$name" "$stage/"
+                  tar -czf "dist/$name-$rid.tar.gz" -C "$stage" \
+                    "$name" LICENSE NOTICE THIRD-PARTY-NOTICES.txt
+                  ;;
+              esac
+            done
+          done
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum tokios-*-sidecar-* > SHA256SUMS
+
+      # Attestations require a PUBLIC repo (private needs GitHub Enterprise), so this step is skipped
+      # while the repo is still private (pre-launch dry runs) and runs automatically once it is public.
+      # Re-tag after flipping public so the published release carries attestations.
+      - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/tokios-*-sidecar-*
+
+      - name: Bundle legal files with the release
+        run: cp LICENSE NOTICE THIRD-PARTY-NOTICES.txt dist/
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

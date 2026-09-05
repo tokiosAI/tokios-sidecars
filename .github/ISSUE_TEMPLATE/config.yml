@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/tokiosAI/tokios-sidecars/security/policy
+    about: Do not open a public issue for security reports. Follow the process in SECURITY.md.
+  - name: Hosted gateway or account questions
+    url: https://tokios.com
+    about: Questions about the hosted Tokios gateway or your account belong in the Tokios console/support, not this tracker.
+  - name: Claude Code CLI problems
+    url: https://github.com/anthropics/claude-code/issues
+    about: If `claude` misbehaves when run directly in a terminal, report it to Anthropic, not here.
+  - name: Codex CLI problems
+    url: https://github.com/openai/codex/issues
+    about: If `codex` misbehaves when run directly in a terminal, report it to OpenAI, not here.

@@ -1,0 +1,41 @@
+Tokios Sidecars — Third-Party Notices
+=====================================
+
+The Tokios Sidecars (tokios-claude-sidecar, tokios-chatgpt-sidecar) are licensed under the
+Apache License 2.0 (see LICENSE). The self-contained release binaries additionally bundle the
+.NET runtime and the ASP.NET Core shared framework, listed below. Each is redistributed under
+its own license (MIT). This file is provided for attribution and convenience — the
+authoritative license for each component ships with that component's own package.
+
+Bundled in the release binaries (runtime dependencies)
+------------------------------------------------------
+
+  .NET runtime and base class libraries
+      © .NET Foundation and Contributors — MIT License
+      https://github.com/dotnet/runtime
+
+  ASP.NET Core shared framework (Kestrel, minimal APIs, configuration, logging)
+      © .NET Foundation and Contributors — MIT License
+      https://github.com/dotnet/aspnetcore
+
+The sidecars have no other package dependencies.
+
+Invoked at runtime but NOT bundled or redistributed
+---------------------------------------------------
+
+  Claude Code CLI (`claude`) — Anthropic. Installed, licensed, and signed in to separately by
+                                the operator; the Claude sidecar only spawns it.
+  Codex CLI (`codex`)        — OpenAI. Installed, licensed, and signed in to separately by the
+                                operator; the ChatGPT sidecar only spawns it.
+
+Build- and test-time only (NOT distributed in the binaries)
+-----------------------------------------------------------
+
+  xunit                        — Apache License 2.0   https://github.com/xunit/xunit
+  xunit.runner.visualstudio    — MIT License          https://github.com/xunit/visualstudio.xunit
+  Microsoft.NET.Test.Sdk       — MIT License          https://github.com/microsoft/vstest
+  coverlet.collector           — MIT License          https://github.com/coverlet-coverage/coverlet
+
+Full copies of the MIT and Apache-2.0 license texts are available at
+https://opensource.org/license/mit and https://www.apache.org/licenses/LICENSE-2.0
+respectively; the Apache-2.0 text also ships in this repository as LICENSE.
