@@ -287,6 +287,31 @@ public sealed class CodexChatTests
     }
 
     [Fact]
+    public async Task StartTurnAsync_PerRequestModelWinsOverSidecarDefault()
+    {
+        var opt = new SidecarOptions { Model = "gpt-default" };
+        var (client, server) = TestTransport.Create(opt, turnScript: async (srv, req) =>
+        {
+            await srv.RespondResultAsync(req.GetProperty("id"), new { turn = new { id = "turn_1", status = "inProgress" } });
+            await srv.NotifyAsync("turn/completed",
+                new { threadId = srv.LastThreadId, turn = new { id = "turn_1", status = "completed" } });
+        });
+        try
+        {
+            await CodexChat.RunAsync(client, opt, new FlattenedRequest { Prompt = "hi", Model = "gpt-picked" },
+                Ctx(), CancellationToken.None);
+
+            var thread = server.Requests.Single(r => r.GetProperty("method").GetString() == "thread/start");
+            Assert.Equal("gpt-picked", thread.GetProperty("params").GetProperty("model").GetString());
+        }
+        finally
+        {
+            await client.DisposeAsync();
+            await server.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task StartTurnAsync_SendsVerifiedProtocolShapes()
     {
         var opt = new SidecarOptions { Model = "gpt-5-codex", Effort = "high" };

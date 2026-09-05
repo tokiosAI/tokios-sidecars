@@ -78,8 +78,11 @@ public sealed class CodexAppServerClient : IAsyncDisposable
             ["approvalPolicy"] = "never",
             ["ephemeral"] = true,
         };
-        if (!string.IsNullOrWhiteSpace(_opt.Model))
-            threadParams["model"] = _opt.Model;
+        // Per-request model (already validated against the allow-list by the endpoint) wins over the
+        // sidecar-wide default; both absent = the CLI's own default model.
+        var model = req.Model ?? (string.IsNullOrWhiteSpace(_opt.Model) ? null : _opt.Model);
+        if (model is not null)
+            threadParams["model"] = model;
         // System prompt: codex takes developer instructions per thread (the analog of the Claude
         // sidecar's --append-system-prompt); threads are ephemeral and per-request, so nothing leaks.
         if (!string.IsNullOrEmpty(req.SystemPrompt))

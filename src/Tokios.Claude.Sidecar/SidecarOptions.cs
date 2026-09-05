@@ -24,6 +24,13 @@ public sealed class SidecarOptions
     /// <see cref="Model"/>: clients address this id, the CLI picks the real model.</summary>
     public string ServedModelId { get; set; } = "claude-sidecar";
 
+    /// <summary>Optional allow-list of extra real model ids clients may select per request through the
+    /// chat.completions <c>model</c> field. Empty = single-model mode: every request runs
+    /// <see cref="Model"/> regardless of what the client asked for. When set, <c>/v1/models</c>
+    /// advertises these ids alongside <see cref="ServedModelId"/>, a request naming one runs that model,
+    /// and any other id is a 400 (fail closed, like the connector's AllowedHosts).</summary>
+    public string[] Models { get; set; } = Array.Empty<string>();
+
     /// <summary>Max concurrent claude child processes. Subscription rate limits make high values
     /// pointless; 1–2 is realistic.</summary>
     public int MaxConcurrency { get; set; } = 2;
@@ -56,4 +63,8 @@ public sealed record FlattenedRequest
     /// <summary>Per-request effort from <c>reasoning_effort</c> (already mapped to a CLI level);
     /// null = use the sidecar default.</summary>
     public string? Effort { get; init; }
+
+    /// <summary>The raw <c>model</c> field from the request, validated against the sidecar's
+    /// ServedModelId/Models by the endpoint; null after resolution = use the sidecar default model.</summary>
+    public string? Model { get; init; }
 }

@@ -41,10 +41,9 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok", model = options.Ser
 app.MapGet("/v1/models", () => Results.Ok(new
 {
     @object = "list",
-    data = new[]
-    {
-        new { id = options.ServedModelId, @object = "model", created = 0, owned_by = "tokios-claude-sidecar" },
-    },
+    data = new[] { new { id = options.ServedModelId, @object = "model", created = 0, owned_by = "tokios-claude-sidecar" } }
+        .Concat(options.Models.Select(m => new { id = m, @object = "model", created = 0, owned_by = "tokios-claude-sidecar" }))
+        .ToArray(),
 }));
 
 app.MapPost("/v1/chat/completions", async (HttpContext ctx) =>
@@ -74,6 +73,19 @@ app.MapPost("/v1/chat/completions", async (HttpContext ctx) =>
             "Request body contains text that is not valid UTF-8. Send UTF-8 JSON.", "invalid_request_error");
         return;
     }
+
+    // Per-request model selection: the served id (or no model at all) means the sidecar default;
+    // anything else must be on the Sidecar:Models allow-list — fail closed, like connector AllowedHosts.
+    if (!string.IsNullOrWhiteSpace(req.Model) && req.Model != options.ServedModelId
+        && !options.Models.Contains(req.Model))
+    {
+        var valid = string.Join(", ", new[] { options.ServedModelId }.Concat(options.Models));
+        await WriteErrorAsync(ctx, StatusCodes.Status400BadRequest,
+            $"Unknown model '{req.Model}'. This sidecar serves: {valid}.", "invalid_request_error");
+        return;
+    }
+    if (req.Model == options.ServedModelId)
+        req = req with { Model = null }; // the served id maps onto the configured default model
 
     // Queue briefly rather than fail fast: subscription rate limits make real concurrency low anyway,
     // and a short queue smooths over a client firing two requests at once.

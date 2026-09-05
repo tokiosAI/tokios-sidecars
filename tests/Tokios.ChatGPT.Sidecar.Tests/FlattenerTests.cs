@@ -109,6 +109,19 @@ public sealed class FlattenerTests
     }
 
     [Fact]
+    public void Model_CarriedThroughWhenPresent()
+    {
+        Assert.Equal("gpt-5.6-terra", Flatten(
+            """{"model":"gpt-5.6-terra","messages":[{"role":"user","content":"hi"}]}""").Model);
+        Assert.Null(Flatten("""{"messages":[{"role":"user","content":"hi"}]}""").Model);
+    }
+
+    [Fact]
+    public void Rejects_NonStringModel() =>
+        Assert.Contains("'model' must be a string", Reject(
+            """{"model":5,"messages":[{"role":"user","content":"hi"}]}""").Message);
+
+    [Fact]
     public void ContentPartArrays_ConcatenateTextParts()
     {
         var req = Flatten("""{"messages":[{"role":"user","content":[{"type":"text","text":"a"},{"type":"text","text":"b"}]}]}""");

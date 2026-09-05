@@ -31,6 +31,15 @@ public static class ChatRequestFlattener
         if (root.TryGetProperty("logprobs", out _))
             throw new ChatRequestException("'logprobs' is not supported.");
 
+        // Carried through verbatim; the endpoint validates it against ServedModelId/Models.
+        string? model = null;
+        if (root.TryGetProperty("model", out var m) && m.ValueKind != JsonValueKind.Null)
+        {
+            if (m.ValueKind != JsonValueKind.String)
+                throw new ChatRequestException("'model' must be a string.");
+            model = m.GetString();
+        }
+
         // OpenAI reasoning_effort ("minimal"|"low"|"medium"|"high") → claude --effort levels.
         // The CLI's extra levels (xhigh, max) are accepted verbatim; anything else is rejected
         // rather than silently ignored, so a typo doesn't quietly run at the default.
@@ -108,6 +117,7 @@ public static class ChatRequestFlattener
             Stream = stream,
             IncludeUsage = includeUsage,
             Effort = effort,
+            Model = model,
         };
     }
 

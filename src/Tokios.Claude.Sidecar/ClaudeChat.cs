@@ -256,10 +256,13 @@ public static class ClaudeChat
         a.Add("""{"mcpServers":{}}""");
         a.Add("--disable-slash-commands");
         a.Add("--no-session-persistence");
-        if (!string.IsNullOrWhiteSpace(opt.Model))
+        // Per-request model (already validated against the allow-list by the endpoint) wins over the
+        // sidecar-wide default; both absent = the CLI's own default model.
+        var model = req.Model ?? (string.IsNullOrWhiteSpace(opt.Model) ? null : opt.Model);
+        if (model is not null)
         {
             a.Add("--model");
-            a.Add(opt.Model);
+            a.Add(model);
         }
         // Per-request reasoning_effort wins over the sidecar-wide default; both were validated upstream.
         var effort = req.Effort ?? (string.IsNullOrWhiteSpace(opt.Effort) ? null : opt.Effort);
