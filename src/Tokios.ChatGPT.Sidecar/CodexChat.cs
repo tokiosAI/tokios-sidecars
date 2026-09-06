@@ -27,7 +27,7 @@ public static class CodexChat
         var turn = await client.StartTurnAsync(req, ct);
         var text = new StringBuilder();
         string? completedText = null;
-        long? inputTokens = null, outputTokens = null;
+        long? inputTokens = null, outputTokens = null, cachedInputTokens = null;
 
         try
         {
@@ -48,7 +48,7 @@ public static class CodexChat
                             completedText = CompletedAgentText(prms) ?? completedText;
                             break;
                         case "thread/tokenUsage/updated":
-                            ReadUsage(prms, ref inputTokens, ref outputTokens);
+                            ReadUsage(prms, ref inputTokens, ref outputTokens, ref cachedInputTokens);
                             break;
                         case "error":
                             throw ClassifyError(prms, "codex reported an error.");
@@ -92,6 +92,8 @@ public static class CodexChat
                 prompt_tokens = inputTokens ?? 0,
                 completion_tokens = outputTokens ?? 0,
                 total_tokens = (inputTokens ?? 0) + (outputTokens ?? 0),
+                // only when the CLI reported a figure — absent stays absent, so the gateway reads "not reported"
+                prompt_tokens_details = cachedInputTokens is { } cached ? new { cached_tokens = cached } : null,
             },
         };
 
@@ -113,7 +115,7 @@ public static class CodexChat
         var turn = await client.StartTurnAsync(req, ct);
         bool roleSent = false;
         string? completedText = null;
-        long? inputTokens = null, outputTokens = null;
+        long? inputTokens = null, outputTokens = null, cachedInputTokens = null;
 
         try
         {
@@ -150,7 +152,7 @@ public static class CodexChat
                             completedText = CompletedAgentText(prms) ?? completedText;
                             break;
                         case "thread/tokenUsage/updated":
-                            ReadUsage(prms, ref inputTokens, ref outputTokens);
+                            ReadUsage(prms, ref inputTokens, ref outputTokens, ref cachedInputTokens);
                             break;
                         case "error":
                             throw ClassifyError(prms, "codex reported an error.");
@@ -206,6 +208,7 @@ public static class CodexChat
                     prompt_tokens = inputTokens ?? 0,
                     completion_tokens = outputTokens ?? 0,
                     total_tokens = (inputTokens ?? 0) + (outputTokens ?? 0),
+                    prompt_tokens_details = cachedInputTokens is { } cached ? new { cached_tokens = cached } : null,
                 },
             }, CancellationToken.None);
         }
@@ -240,8 +243,10 @@ public static class CodexChat
     }
 
     /// <summary><c>tokenUsage.last</c> is this turn's slice (<c>total</c> is cumulative for the thread,
-    /// which is always one turn here). inputTokens/outputTokens map onto OpenAI prompt/completion.</summary>
-    private static void ReadUsage(JsonElement prms, ref long? inputTokens, ref long? outputTokens)
+    /// which is always one turn here). inputTokens/outputTokens map onto OpenAI prompt/completion;
+    /// cachedInputTokens (the prompt-cache share of inputTokens, which already includes it — Responses
+    /// semantics) maps onto prompt_tokens_details.cached_tokens, the figure the gateway meters.</summary>
+    private static void ReadUsage(JsonElement prms, ref long? inputTokens, ref long? outputTokens, ref long? cachedInputTokens)
     {
         if (prms.ValueKind == JsonValueKind.Object
             && prms.TryGetProperty("tokenUsage", out var tu)
@@ -251,6 +256,7 @@ public static class CodexChat
         {
             inputTokens = ReadLong(last, "inputTokens") ?? inputTokens;
             outputTokens = ReadLong(last, "outputTokens") ?? outputTokens;
+            cachedInputTokens = ReadLong(last, "cachedInputTokens") ?? cachedInputTokens;
         }
     }
 

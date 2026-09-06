@@ -38,7 +38,7 @@ public sealed class CodexChatTests
                 turnId = "turn_1",
                 tokenUsage = new
                 {
-                    last = new { inputTokens = 10, cachedInputTokens = 0, outputTokens = 5, reasoningOutputTokens = 0, totalTokens = 15 },
+                    last = new { inputTokens = 10, cachedInputTokens = 4, outputTokens = 5, reasoningOutputTokens = 0, totalTokens = 15 },
                 },
             });
         await srv.NotifyAsync("turn/completed",
@@ -69,6 +69,8 @@ public sealed class CodexChatTests
             Assert.Equal(10, usage.GetProperty("prompt_tokens").GetInt64());
             Assert.Equal(5, usage.GetProperty("completion_tokens").GetInt64());
             Assert.Equal(15, usage.GetProperty("total_tokens").GetInt64());
+            // the CLI's cachedInputTokens surfaces as the OpenAI-shaped prompt-cache detail the gateway meters
+            Assert.Equal(4, usage.GetProperty("prompt_tokens_details").GetProperty("cached_tokens").GetInt64());
 
             // The ephemeral thread is archived best-effort once the request is done.
             await server.WaitForRequestAsync("thread/archive");
@@ -116,6 +118,7 @@ public sealed class CodexChatTests
             Assert.Equal(0, chunks[4].GetProperty("choices").GetArrayLength());
             Assert.Equal(10, chunks[4].GetProperty("usage").GetProperty("prompt_tokens").GetInt64());
             Assert.Equal(15, chunks[4].GetProperty("usage").GetProperty("total_tokens").GetInt64());
+            Assert.Equal(4, chunks[4].GetProperty("usage").GetProperty("prompt_tokens_details").GetProperty("cached_tokens").GetInt64());
         }
         finally
         {

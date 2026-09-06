@@ -54,7 +54,15 @@ public static class ClaudeChat
             if (p.ExitCode != 0 || isError)
                 throw ClassifyError(p.ExitCode, stderr, resultText);
 
-            long promptTokens = ReadUsageLong(root, "input_tokens") ?? 0;
+            // Anthropic's input_tokens EXCLUDES the cached prefix — cache reads and cache writes are reported
+            // beside it — while OpenAI's prompt_tokens is the WHOLE prompt with the cached share as a detail. So
+            // the total is the sum of the three, and the reads surface as prompt_tokens_details.cached_tokens
+            // (the figure the gateway meters). Without the sum, a cached Claude Code turn logged as ~10% of its
+            // real prompt.
+            long inputTokens = ReadUsageLong(root, "input_tokens") ?? 0;
+            long cacheRead = ReadUsageLong(root, "cache_read_input_tokens") ?? 0;
+            long cacheWrite = ReadUsageLong(root, "cache_creation_input_tokens") ?? 0;
+            long promptTokens = inputTokens + cacheRead + cacheWrite;
             long completionTokens = ReadUsageLong(root, "output_tokens") ?? 0;
 
             // Surface the CLI's own cost accounting for whoever fronts the subscription.
@@ -81,6 +89,7 @@ public static class ClaudeChat
                     prompt_tokens = promptTokens,
                     completion_tokens = completionTokens,
                     total_tokens = promptTokens + completionTokens,
+                    prompt_tokens_details = new { cached_tokens = cacheRead },
                 },
             };
 
@@ -108,6 +117,7 @@ public static class ClaudeChat
         bool roleSent = false;
         string? stopReason = null;
         long? inputTokens = null, outputTokens = null;
+        long? cacheRead = null, cacheWrite = null; // Anthropic reports the cached prefix apart from input_tokens (see RunAsync)
         string? errorText = null;
 
         try
@@ -131,7 +141,11 @@ public static class ClaudeChat
                         {
                             case "message_start":
                                 if (ev.TryGetProperty("message", out var m) && m.TryGetProperty("usage", out var mu))
+                                {
                                     inputTokens = ReadLong(mu, "input_tokens");
+                                    cacheRead = ReadLong(mu, "cache_read_input_tokens");
+                                    cacheWrite = ReadLong(mu, "cache_creation_input_tokens");
+                                }
                                 if (!roleSent)
                                 {
                                     await WriteChunkAsync(response, new
@@ -183,6 +197,8 @@ public static class ClaudeChat
                         {
                             inputTokens ??= ReadLong(ru, "input_tokens");
                             outputTokens ??= ReadLong(ru, "output_tokens");
+                            cacheRead ??= ReadLong(ru, "cache_read_input_tokens");
+                            cacheWrite ??= ReadLong(ru, "cache_creation_input_tokens");
                         }
                         break;
 
@@ -215,9 +231,11 @@ public static class ClaudeChat
                 choices = Array.Empty<object>(),
                 usage = new
                 {
-                    prompt_tokens = inputTokens ?? 0,
+                    // whole prompt = uncached input + cache reads + cache writes (see RunAsync)
+                    prompt_tokens = (inputTokens ?? 0) + (cacheRead ?? 0) + (cacheWrite ?? 0),
                     completion_tokens = outputTokens ?? 0,
-                    total_tokens = (inputTokens ?? 0) + (outputTokens ?? 0),
+                    total_tokens = (inputTokens ?? 0) + (cacheRead ?? 0) + (cacheWrite ?? 0) + (outputTokens ?? 0),
+                    prompt_tokens_details = new { cached_tokens = cacheRead ?? 0 },
                 },
             }, CancellationToken.None);
         }
